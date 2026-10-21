@@ -1,0 +1,126 @@
+{
+  "info": {
+    "name": "SBA301 Lab 06 - Spring Security JWT",
+    "description": "Core Lab 06: signup, login, protected APIs and negative cases. Run in order with the SBA301 Lab06 Local environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "T01 Signup valid",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"SBA301 Student\",\n  \"email\": \"student01@fpt.edu.vn\",\n  \"password\": \"P@ssword123\"\n}" },
+        "url": "{{baseUrl}}/auth/signup"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Signup returns 201', () => pm.response.to.have.status(201));",
+        "const body = pm.response.json();",
+        "pm.test('Safe user response', () => { pm.expect(body.email).to.eql('student01@fpt.edu.vn'); pm.expect(body).not.to.have.property('password'); });"
+      ] } }]
+    },
+    {
+      "name": "T02 Signup duplicate",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"SBA301 Student\",\n  \"email\": \"student01@fpt.edu.vn\",\n  \"password\": \"P@ssword123\"\n}" },
+        "url": "{{baseUrl}}/auth/signup"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Duplicate returns 409', () => pm.response.to.have.status(409));"] } }]
+    },
+    {
+      "name": "T03 Login valid",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"student01@fpt.edu.vn\",\n  \"password\": \"P@ssword123\"\n}" },
+        "url": "{{baseUrl}}/auth/login"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Login returns 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.test('JWT and TTL returned', () => { pm.expect(json.token.split('.')).to.have.length(3); pm.expect(json.expiresIn).to.be.above(0); });",
+        "pm.environment.set('token', json.token);"
+      ] } }]
+    },
+    {
+      "name": "T04 Login bad password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"student01@fpt.edu.vn\",\n  \"password\": \"wrong-password\"\n}" },
+        "url": "{{baseUrl}}/auth/login"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Bad credentials return 401', () => pm.response.to.have.status(401));", "pm.test('No token returned', () => pm.expect(pm.response.text()).not.to.include('token'));" ] } }]
+    },
+    {
+      "name": "T05 Users me without token",
+      "request": { "method": "GET", "url": "{{baseUrl}}/users/me" },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('No token returns 401', () => pm.response.to.have.status(401));"] } }]
+    },
+    {
+      "name": "T06 Users me with token",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/users/me" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Valid token returns 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('Correct principal and no password', () => { pm.expect(body.email).to.eql('student01@fpt.edu.vn'); pm.expect(body).not.to.have.property('password'); });"
+      ] } }]
+    },
+    {
+      "name": "T07 Users list with token",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/users" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Users returns 200', () => pm.response.to.have.status(200));",
+        "pm.test('List excludes password', () => pm.response.json().forEach(user => pm.expect(user).not.to.have.property('password')));"
+      ] } }]
+    },
+    {
+      "name": "T08 Malformed token",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer abc" }], "url": "{{baseUrl}}/users/me" },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Malformed token returns 401', () => pm.response.to.have.status(401));"] } }]
+    },
+    {
+      "name": "T09 Tampered token",
+      "event": [
+        { "listen": "prerequest", "script": { "exec": [
+          "const parts = pm.environment.get('token').split('.');",
+          "const s = parts[2];",
+          "parts[2] = (s[0] === 'A' ? 'B' : 'A') + s.substring(1);",
+          "pm.variables.set('tamperedToken', parts.join('.'));"
+        ] } },
+        { "listen": "test", "script": { "exec": ["pm.test('Tampered token returns 401', () => pm.response.to.have.status(401));"] } }
+      ],
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{tamperedToken}}" }], "url": "{{baseUrl}}/users/me" }
+    },
+    {
+      "name": "T10 Expired token (manual TTL step)",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{expiredToken}}" }], "url": "{{baseUrl}}/users/me" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('An expired token was supplied', () => pm.expect(pm.environment.get('expiredToken')).to.be.a('string').and.not.empty);",
+        "pm.test('Expired token returns 401', () => pm.response.to.have.status(401));"
+      ] } }]
+    },
+    {
+      "name": "T11 Signup invalid email",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"SBA301 Student\",\n  \"email\": \"invalid-email\",\n  \"password\": \"P@ssword123\"\n}" },
+        "url": "{{baseUrl}}/auth/signup"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Invalid email returns 400', () => pm.response.to.have.status(400));"] } }]
+    },
+    {
+      "name": "T12 Signup empty password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"SBA301 Student\",\n  \"email\": \"another@fpt.edu.vn\",\n  \"password\": \"\"\n}" },
+        "url": "{{baseUrl}}/auth/signup"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('Empty password returns 400', () => pm.response.to.have.status(400));"] } }]
+    }
+  ]
+}
