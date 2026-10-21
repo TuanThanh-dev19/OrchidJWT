@@ -4,7 +4,9 @@ import fu.se.lab06jwt.dtos.LoginUserDto;
 import fu.se.lab06jwt.dtos.RegisterUserDto;
 import fu.se.lab06jwt.entities.User;
 import fu.se.lab06jwt.repositories.UserRepository;
+
 import java.util.Locale;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,7 +41,7 @@ public class AuthenticationService {
     public User authenticate(LoginUserDto input) {
         String email = input.getEmail().trim().toLowerCase(Locale.ROOT);
         authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(email, input.getPassword()));
+                new UsernamePasswordAuthenticationToken(email, input.getPassword()));
         return userRepository.findByEmail(email).orElseThrow();
     }
 }
